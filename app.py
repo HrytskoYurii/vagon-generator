@@ -32,8 +32,8 @@ def get_dynamic_font(draw, text, font_path, max_pt, max_px_width):
 with st.sidebar:
     st.header("⚙️ Налаштування")
     train_no = st.text_input("№ Поїзда", value="19/20")
-    route_ua = st.text_input("Напрямок (UA)", value="КИЇВ — ХЕЛМ")
-    route_en = st.text_input("Напрямок (EN)", value="KYIV — CHELM")
+    route_ua = st.text_input("Напрямок (UA)", value="Київ — Хелм")
+    route_en = st.text_input("Напрямок (EN)", value="Kyiv — Chelm")
     
     st.divider()
     st.header("🔢 Вагони")
