@@ -3,102 +3,114 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import zipfile
 
-st.set_page_config(page_title="Vagon Gen Heavy", layout="centered")
+# Налаштування сторінки
+st.set_page_config(page_title="Маршрутна табличка", layout="centered")
+st.title("📋 Генератор: Маршрутна табличка")
 
-st.title("🚉 Генератор дощок (Bold Version)")
+# Константи для друку (300 DPI)
+DPI = 300
+MM_TO_PX = DPI / 25.4
 
-# --- Sidebar ---
+# Розміри А4
+WIDTH = int(210 * MM_TO_PX)
+HEIGHT = int(297 * MM_TO_PX)
+
+def mm(value): return int(value * MM_TO_PX)
+def pt(value): return int(value * (DPI / 72))
+
 with st.sidebar:
-    st.header("⚙️ Налаштування")
-    train_no = st.text_input("№ Поїзда", value="19/20")
-    route_ua = st.text_input("Напрямок (UA)", value="КИЇВ — ХЕЛМ")
-    route_en = st.text_input("Напрямок (EN)", value="KYIV — CHELM")
+    st.header("⚙️ Дані")
+    train_no = st.text_input("Номер поїзда", value="19/20")
+    route_ua = st.text_input("Назва (UA)", value="КИЇВ — ХЕЛМ")
+    route_en = st.text_input("Назва (EN)", value="KYIV — CHELM")
     
-    col_v1, col_v2 = st.columns(2)
-    start_v = col_v1.number_input("З вагона", min_value=1, value=14)
-    end_v = col_v2.number_input("По вагон", min_value=1, value=16)
+    st.divider()
+    st.header("🔢 Вагони")
+    col1, col2 = st.columns(2)
+    start_v = col1.number_input("З вагона", min_value=1, value=14)
+    end_v = col2.number_input("По вагон", min_value=1, value=16)
 
-# --- Функція для малювання ЖИРНОГО тексту з інтервалами ---
-def draw_bold_text(draw, text, position, font, fill="black", spacing=0, thickness=2):
-    # thickness=2 робить текст товстішим, малюючи його кілька разів зі зміщенням
-    sum_width = sum(draw.textbbox((0, 0), char, font=font)[2] for char in text)
-    total_width = sum_width + spacing * (len(text) - 1)
-    
-    x, y = position
-    current_x = x - total_width / 2
+def draw_arrow(draw, cx, cy, direction="left"):
+    w, h = mm(12), mm(10)
+    if direction == "left":
+        points = [(cx + w/2, cy - h/2), (cx + w/2, cy + h/2), (cx - w/2, cy)]
+    else:
+        points = [(cx - w/2, cy - h/2), (cx - w/2, cy + h/2), (cx + w/2, cy)]
+    draw.polygon(points, fill="black")
 
-    for char in text:
-        # Малюємо символ кілька разів для екстремальної жирності
-        for off_x in range(-thickness, thickness + 1):
-            for off_y in range(-thickness, thickness + 1):
-                draw.text((current_x + off_x, y + off_y), char, font=font, fill=fill, anchor="lm")
-        
-        char_width = draw.textbbox((0, 0), char, font=font)[2]
-        current_x += char_width + spacing
-
-def create_board(vagon, left_v, right_v):
-    width, height = 2400, 1600 
-    img = Image.new('RGB', (width, height), color=(255, 255, 255))
+def create_page(v_main, v_left, v_right):
+    img = Image.new('RGB', (WIDTH, HEIGHT), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    font_path = "SourceSans3-VariableFont_wght.ttf"
-
+    # Використовуємо ваш файл inter-bold.ttf
+    font_file = "inter-bold.ttf"
+    
     try:
-        # Завантажуємо шрифт
-        f_train = ImageFont.truetype(font_path, 150)
-        f_route = ImageFont.truetype(font_path, 130)
-        f_vagon = ImageFont.truetype(font_path, 610)
-        f_side = ImageFont.truetype(font_path, 200)
-        f_arrow = ImageFont.truetype(font_path, 150)
+        f_28 = ImageFont.truetype(font_file, pt(28))
+        f_52 = ImageFont.truetype(font_file, pt(52))
+        f_190 = ImageFont.truetype(font_file, pt(190))
     except:
-        st.error("Шрифт не знайдено на GitHub!")
+        st.error(f"Файл {font_file} не знайдено в репозиторії GitHub!")
         return None
 
-    # 1. Номер поїзда (Чорна плашка + жирний текст)
-    box_w = 750
-    draw.rounded_rectangle([width/2-box_w/2, 50, width/2+box_w/2, 250], radius=40, fill="black")
-    draw_bold_text(draw, train_no, (width/2, 150), f_train, fill="white", spacing=30, thickness=2)
+    # 4. Верхній блок (Номер)
+    bw, bh = mm(60), mm(30)
+    bx, by = (WIDTH - bw) // 2, mm(15)
+    draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=mm(8), fill="black")
+    draw.text((WIDTH/2, by + bh/2), train_no, fill="white", font=f_28, anchor="mm")
 
-    # 2. Напрямок UA/EN (Жирний, інтервал 0)
-    draw_bold_text(draw, route_ua, (width/2, 420), f_route, spacing=0, thickness=2)
-    draw_bold_text(draw, route_en, (width/2, 570), f_route, spacing=0, thickness=2)
+    # 5. Назва UA
+    ua_y = by + bh + mm(12)
+    draw.text((WIDTH/2, ua_y), route_ua, fill="black", font=f_52, anchor="mt")
 
-    # 3. Номер вагона (ЕКСТРЕМАЛЬНО жирний)
-    draw_bold_text(draw, str(vagon), (width/2, height/2 + 180), f_vagon, spacing=30, thickness=4)
+    # 6. Назва EN
+    ua_bbox = draw.textbbox((WIDTH/2, ua_y), route_ua, font=f_52, anchor="mt")
+    en_y = ua_bbox[3] + mm(5)
+    draw.text((WIDTH/2, en_y), route_en, fill="black", font=f_28, anchor="mt")
 
-    # 4. Сусідні вагони
-    if left_v:
-        draw_bold_text(draw, str(left_v), (350, 1350), f_side, spacing=30, thickness=2)
-        draw.text((350, 1500), "◀", fill="black", anchor="mm", font=f_arrow)
-    if right_v:
-        draw_bold_text(draw, str(right_v), (width - 350, 1350), f_side, spacing=30, thickness=2)
-        draw.text((width - 350, 1500), "▶", fill="black", anchor="mm", font=f_arrow)
-    
+    # 7. Центральне число
+    en_bbox = draw.textbbox((WIDTH/2, en_y), route_en, font=f_28, anchor="mt")
+    main_y = en_bbox[3] + mm(20)
+    draw.text((WIDTH/2, main_y), str(v_main), fill="black", font=f_190, anchor="mt")
+
+    # Розрахунок центру великої цифри для вирівнювання бічних
+    main_bbox = draw.textbbox((WIDTH/2, main_y), str(v_main), font=f_190, anchor="mt")
+    cy_sides = (main_bbox[1] + main_bbox[3]) / 2
+
+    # 8-9. Ліве число + стрілка
+    if v_left:
+        lx = mm(15 + 5)
+        draw.text((lx, cy_sides), str(v_left), fill="black", font=f_52, anchor="lm")
+        l_bbox = draw.textbbox((lx, cy_sides), str(v_left), font=f_52, anchor="lm")
+        draw_arrow(draw, l_bbox[2] + mm(5 + 6), cy_sides, "left")
+
+    # Праве число + стрілка
+    if v_right:
+        rx = WIDTH - mm(15 + 5)
+        draw.text((rx, cy_sides), str(v_right), fill="black", font=f_52, anchor="rm")
+        r_bbox = draw.textbbox((rx, cy_sides), str(v_left), font=f_52, anchor="rm") # fix for width calculation
+        # Отримуємо точну праву межу для відступу стрілки вліво
+        actual_r_bbox = draw.textbbox((rx, cy_sides), str(v_right), font=f_52, anchor="rm")
+        draw_arrow(draw, actual_r_bbox[0] - mm(5 + 6), cy_sides, "right")
+
     return img
 
-# --- Кнопка виконання ---
-if st.button("🚀 Згенерувати жирні макети"):
-    if not start_v or not end_v:
-        st.warning("Вкажіть номери вагонів")
-    else:
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zip_file:
-            for v in range(int(start_v), int(end_v) + 1):
-                p, n = (v-1 if v > start_v else None), (v+1 if v < end_v else None)
-                
-                # Сторона 1
-                img1 = create_board(v, p, n)
-                if img1:
-                    buf1 = io.BytesIO(); img1.save(buf1, format="PNG")
-                    zip_file.writestr(f"vagon_{v:02d}_side1.png", buf1.getvalue())
-                
-                # Сторона 2
-                img2 = create_board(v, n, p)
-                if img2:
-                    buf2 = io.BytesIO(); img2.save(buf2, format="PNG")
-                    zip_file.writestr(f"vagon_{v:02d}_side2.png", buf2.getvalue())
-                
-                if v == start_v:
-                    st.image(img1, caption="Попередній перегляд (Жирний шрифт)")
+if st.button("🚀 Згенерувати макети"):
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "a", zipfile.ZIP_DEFLATED) as zip_file:
+        for v in range(int(start_v), int(end_v) + 1):
+            p, n = (v-1 if v > start_v else None), (v+1 if v < end_v else None)
+            
+            # Сторона А
+            img_a = create_page(v, p, n)
+            if img_a:
+                b = io.BytesIO(); img_a.save(b, format="PNG"); zip_file.writestr(f"vagon_{v}_A.png", b.getvalue())
+            
+            # Сторона Б
+            img_b = create_page(v, n, p)
+            if img_b:
+                b = io.BytesIO(); img_b.save(b, format="PNG"); zip_file.writestr(f"vagon_{v}_B.png", b.getvalue())
+            
+            if v == start_v: st.image(img_a, caption=f"Макет для вагона {v}")
 
-        st.download_button("📥 Завантажити ZIP", zip_buffer.getvalue(), "boards_bold.zip")
+    st.download_button("📥 Скачати ZIP", zip_buf.getvalue(), "labels_A4.zip")
