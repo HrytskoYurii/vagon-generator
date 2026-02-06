@@ -14,21 +14,20 @@ MM_TO_PX = DPI / 25.4
 # РОЗМІРИ А4 (Альбомна)
 WIDTH = int(297 * MM_TO_PX)
 HEIGHT = int(210 * MM_TO_PX)
-MAX_TEXT_WIDTH = WIDTH - mm(30)  # Максимальна ширина тексту (поля по 15мм)
 
 def mm(value): return int(value * MM_TO_PX)
 def pt(value): return int(value * (DPI / 72))
 
 def get_dynamic_font(draw, text, font_path, max_pt, max_px_width):
-    """Підбирає максимальний розмір шрифту, що вписується в ширину"""
     current_pt = max_pt
-    font = ImageFont.truetype(font_path, pt(current_pt))
-    
-    # Зменшуємо шрифт, поки ширина тексту більша за дозволену
-    while draw.textbbox((0, 0), text, font=font)[2] > max_px_width and current_pt > 20:
-        current_pt -= 2
+    try:
         font = ImageFont.truetype(font_path, pt(current_pt))
-    return font
+        while draw.textbbox((0, 0), text, font=font)[2] > max_px_width and current_pt > 20:
+            current_pt -= 2
+            font = ImageFont.truetype(font_path, pt(current_pt))
+        return font
+    except:
+        return ImageFont.load_default()
 
 with st.sidebar:
     st.header("⚙️ Налаштування")
@@ -58,56 +57,50 @@ def create_landscape_page(v_main, v_left, v_right):
     draw = ImageDraw.Draw(img)
     
     font_file = "inter-bold.ttf"
+    max_w = WIDTH - mm(30)
     
     try:
         f_train = ImageFont.truetype(font_file, pt(60))
-        # ДИНАМІЧНИЙ ШРИФТ ДЛЯ UA
-        f_ua = get_dynamic_font(draw, route_ua, font_file, 80, MAX_TEXT_WIDTH)
-        # ДИНАМІЧНИЙ ШРИФТ ДЛЯ EN (щоб теж не вилазив)
-        f_en = get_dynamic_font(draw, route_en, font_file, 60, MAX_TEXT_WIDTH)
-        
+        f_ua = get_dynamic_font(draw, route_ua, font_file, 80, max_w)
+        f_en = get_dynamic_font(draw, route_en, font_file, 60, max_w)
         f_main_no = ImageFont.truetype(font_file, pt(300))
         f_side_no = ImageFont.truetype(font_file, pt(90))
     except:
-        st.error(f"Файл {font_file} не знайдено!")
+        st.error(f"Файл {font_file} не знайдено! Перевірте наявність шрифту в репозиторії.")
         return None
 
-    # 1. Верхній блок (Номер поїзда)
+    # 1. Номер поїзда
     bw, bh = mm(95), mm(35)
     bx, by = (WIDTH - bw) // 2, mm(12)
     draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=mm(8), fill="black")
     draw.text((WIDTH/2, by + bh/2), train_no, fill="white", font=f_train, anchor="mm")
 
-    # 2. Назви маршрутів (UA)
+    # 2. Назви (UA/EN)
     ua_y = by + bh + mm(10)
     draw.text((WIDTH/2, ua_y), route_ua, fill="black", font=f_ua, anchor="mt")
     
-    # Визначаємо координату Y для EN на основі реальної висоти UA
     ua_bbox = draw.textbbox((WIDTH/2, ua_y), route_ua, font=f_ua, anchor="mt")
     en_y = ua_bbox[3] + mm(3)
     draw.text((WIDTH/2, en_y), route_en, fill="black", font=f_en, anchor="mt")
 
-    # 3. Центральне число (300 pt)
+    # 3. Велике число
     en_bbox = draw.textbbox((WIDTH/2, en_y), route_en, font=f_en, anchor="mt")
     main_y = en_bbox[3] + mm(5)
     draw.text((WIDTH/2, main_y), str(v_main), fill="black", font=f_main_no, anchor="mt")
 
-    # Центр для бокових цифр
+    # 4. Бічні числа
     main_bbox = draw.textbbox((WIDTH/2, main_y), str(v_main), font=f_main_no, anchor="mt")
     cy_sides = (main_bbox[1] + main_bbox[3]) / 2
-
-    # 4. Бічні числа (90 pt) та стрілки
     side_margin = mm(25) 
+
     if v_left:
-        lx = side_margin
-        draw.text((lx, cy_sides), str(v_left), fill="black", font=f_side_no, anchor="lm")
-        l_bbox = draw.textbbox((lx, cy_sides), str(v_left), font=f_side_no, anchor="lm")
+        draw.text((side_margin, cy_sides), str(v_left), fill="black", font=f_side_no, anchor="lm")
+        l_bbox = draw.textbbox((side_margin, cy_sides), str(v_left), font=f_side_no, anchor="lm")
         draw_arrow_below(draw, l_bbox, "left")
 
     if v_right:
-        rx = WIDTH - side_margin
-        draw.text((rx, cy_sides), str(v_right), fill="black", font=f_side_no, anchor="rm")
-        r_bbox = draw.textbbox((rx, cy_sides), str(v_right), font=f_side_no, anchor="rm")
+        draw.text((WIDTH - side_margin, cy_sides), str(v_right), fill="black", font=f_side_no, anchor="rm")
+        r_bbox = draw.textbbox((WIDTH - side_margin, cy_sides), str(v_right), font=f_side_no, anchor="rm")
         draw_arrow_below(draw, r_bbox, "right")
 
     return img
@@ -117,13 +110,16 @@ if st.button("🚀 Згенерувати таблички"):
     with zipfile.ZipFile(zip_buf, "a", zipfile.ZIP_DEFLATED) as zip_file:
         for v in range(int(start_v), int(end_v) + 1):
             p, n = (v-1 if v > start_v else None), (v+1 if v < end_v else None)
+            
             img_a = create_landscape_page(v, p, n)
             if img_a:
                 b = io.BytesIO(); img_a.save(b, format="PNG"); zip_file.writestr(f"vagon_{v}_A.png", b.getvalue())
+            
             img_b = create_landscape_page(v, n, p)
             if img_b:
                 b = io.BytesIO(); img_b.save(b, format="PNG"); zip_file.writestr(f"vagon_{v}_B.png", b.getvalue())
+            
             if v == start_v:
-                st.image(img_a, caption="Попередній перегляд (Шрифт адаптується)")
+                st.image(img_a, caption="Попередній перегляд")
 
-    st.download_button("📥 Завантажити ZIP", zip_buf.getvalue(), "labels_auto_font.zip")
+    st.download_button("📥 Завантажити ZIP", zip_buf.getvalue(), "labels.zip")
