@@ -38,8 +38,8 @@ with st.sidebar:
     st.divider()
     st.header("🔢 Вагони")
     col1, col2 = st.columns(2)
-    start_v = col1.number_input("З вагона", min_value=1, value=14)
-    end_v = col2.number_input("По вагон", min_value=1, value=16)
+    start_v = col1.number_input("З вагона", min_value=1, value=1)
+    end_v = col2.number_input("По вагон", min_value=1, value=10)
 
 def draw_arrow_below(draw, num_bbox, direction="left"):
     num_center_x = (num_bbox[0] + num_bbox[2]) / 2
